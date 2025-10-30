@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chat en tiempo real 1</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f1f1f1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      #chat-container {
+        width: 400px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #messages {
+        flex: 1;
+        padding: 15px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .message {
+        padding: 8px 12px;
+        border-radius: 15px;
+        max-width: 70%;
+        word-wrap: break-word;
+      }
+      .own {
+        background-color: #0084ff;
+        color: white;
+        align-self: flex-end;
+      }
+      .other {
+        background-color: #e5e5ea;
+        color: black;
+        align-self: flex-start;
+      }
+      input {
+        border: none;
+        padding: 10px;
+        outline: none;
+        font-size: 16px;
+        border-top: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="chat-container">
+      <div id="messages"></div>
+      <input
+        type="text"
+        id="messageInput"
+        placeholder="Escribe un mensaje y presiona Enter..."
+      />
+    </div>
+
+    <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+    <script>
+      // ID único para distinguir quién envió el mensaje
+      const senderId = Math.random().toString(36).substring(2, 15);
+      const BACKEND_URL = "https://back2-lyuk.onrender.com/"; // tu backend juan (se usa al enviar desde este cliente)
+
+      // Cliente 1: app/key que usas en tu proyecto JUAN (5398827 / us2)
+      const pusherJuan = new Pusher("5398827de005ac67b6b2", { cluster: "us2" });
+      const channelJuan = pusherJuan.subscribe("josue-juanito");
+
+      // Cliente 2: app/key que usa el backend principal (c87165 / mt1)
+      // (esto permite recibir mensajes enviados desde index.html que dispara con esa app)
+      const pusherMain = new Pusher("c87165fe436b0a5d5ba0", { cluster: "mt1" });
+      const channelMain = pusherMain.subscribe("josue-juanito");
+
+      const messagesDiv = document.getElementById("messages");
+      const messageInput = document.getElementById("messageInput");
+
+      // Recibir mensajes
+      function handleIncoming(data) {
+        if (!data) return;
+        // ignorar mensajes que vengan de este cliente (ya los mostramos localmente)
+        if (data.senderId && data.senderId === senderId) return;
+        addMessage(data.message, "other");
+      }
+
+      // Bind al evento de aplicación en ambas suscripciones
+      channelJuan.bind("my-event", handleIncoming);
+      channelMain.bind("my-event", handleIncoming);
+
+      // Mejor logging para diagnosticar
+      pusherJuan.connection.bind("connected", () =>
+        console.log("pusherJuan connected (us2) - subscribed to josue-juanito")
+      );
+      pusherMain.connection.bind("connected", () =>
+        console.log("pusherMain connected (mt1) - subscribed to josue-juanito")
+      );
+
+      // Enviar mensajes con Enter
+      messageInput.addEventListener("keypress", function (e) {
+        if (e.key === "Enter" && messageInput.value.trim() !== "") {
+          const message = messageInput.value.trim();
+          addMessage(message, "own"); // mostrar en pantalla (enviado)
+          sendMessage(message); // enviarlo al backend que hace trigger
+          messageInput.value = "";
+        }
+      });
+
+      // Agregar mensaje al chat
+      function addMessage(text, type) {
+        const msgDiv = document.createElement("div");
+        msgDiv.classList.add("message", type);
+        msgDiv.textContent = text;
+        messagesDiv.appendChild(msgDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      // Enviar mensaje al backend Flask
+      function sendMessage(message) {
+        fetch(BACKEND_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message,
+            senderId,
+            channel: "josue-juanito",
+          }),
+        }).catch((e) => console.error("Error enviando al backend:", e));
+      }
+    </script>
+  </body>
+</html>
